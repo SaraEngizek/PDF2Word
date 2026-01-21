@@ -1,0 +1,189 @@
+name: Build PDF2Word
+
+on:
+  push:
+    branches: [ main, master ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:  # Manuel tetikleme için
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Homebrew dependencies
+        run: |
+          brew install poppler tesseract tesseract-lang
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install PyQt6 pytesseract pdf2image Pillow numpy python-docx pyinstaller
+
+      - name: Copy tessdata
+        run: |
+          mkdir -p portable-build/tesseract-bundle/tessdata
+          cp /opt/homebrew/share/tessdata/*.traineddata portable-build/tesseract-bundle/tessdata/ 2>/dev/null || \
+          cp /usr/local/share/tessdata/*.traineddata portable-build/tesseract-bundle/tessdata/ 2>/dev/null || true
+
+      - name: Create icon
+        run: |
+          cd assets/icons
+          python create_icon.py
+          iconutil -c icns app.iconset -o app.icns || true
+
+      - name: Build with PyInstaller
+        run: |
+          pyinstaller --clean --noconfirm portable-build/specs/macos_portable.spec
+
+      - name: Create DMG
+        run: |
+          if [ -d "dist/PDF2Word.app" ]; then
+            hdiutil create -volname "PDF2Word" -srcfolder "dist/PDF2Word.app" -ov -format UDZO "dist/PDF2Word_macOS.dmg"
+          fi
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PDF2Word-macOS
+          path: |
+            dist/PDF2Word.app
+            dist/PDF2Word_macOS.dmg
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Poppler
+        run: |
+          # Poppler Windows kurulumu
+          Invoke-WebRequest -Uri "https://github.com/oschwartz10612/poppler-windows/releases/download/v24.02.0-0/Release-24.02.0-0.zip" -OutFile "poppler.zip"
+          Expand-Archive -Path "poppler.zip" -DestinationPath "C:\poppler"
+          echo "C:\poppler\poppler-24.02.0\Library\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Install Tesseract
+        run: |
+          choco install tesseract --no-progress -y
+          echo "C:\Program Files\Tesseract-OCR" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install PyQt6 pytesseract pdf2image Pillow numpy python-docx pyinstaller
+
+      - name: Copy tessdata
+        run: |
+          New-Item -ItemType Directory -Force -Path "portable-build\tesseract-bundle\tessdata"
+          Copy-Item "C:\Program Files\Tesseract-OCR\tessdata\*.traineddata" "portable-build\tesseract-bundle\tessdata\" -ErrorAction SilentlyContinue
+
+      - name: Create icon
+        run: |
+          cd assets/icons
+          python create_icon.py
+
+      - name: Build with PyInstaller
+        run: |
+          pyinstaller --clean --noconfirm portable-build/specs/windows_portable.spec
+
+      - name: Create ZIP for release
+        run: |
+          Compress-Archive -Path dist\PDF2Word_Windows -DestinationPath dist\PDF2Word_Windows.zip
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PDF2Word-Windows
+          path: |
+            dist/PDF2Word_Windows/
+            dist/PDF2Word_Windows.zip
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y poppler-utils tesseract-ocr tesseract-ocr-tur tesseract-ocr-eng
+          sudo apt-get install -y libxcb-xinerama0 libxcb-cursor0 libgl1-mesa-glx libegl1
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install PyQt6 pytesseract pdf2image Pillow numpy python-docx pyinstaller
+
+      - name: Copy tessdata
+        run: |
+          mkdir -p portable-build/tesseract-bundle/tessdata
+          cp /usr/share/tesseract-ocr/5/tessdata/*.traineddata portable-build/tesseract-bundle/tessdata/ 2>/dev/null || \
+          cp /usr/share/tesseract-ocr/4.00/tessdata/*.traineddata portable-build/tesseract-bundle/tessdata/ 2>/dev/null || true
+
+      - name: Create icon
+        run: |
+          cd assets/icons
+          python create_icon.py
+
+      - name: Build with PyInstaller
+        run: |
+          pyinstaller --clean --noconfirm portable-build/specs/linux_portable.spec
+
+      - name: Create tar.gz for release
+        run: |
+          cd dist
+          tar -czvf PDF2Word_Linux.tar.gz PDF2Word_Linux/
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PDF2Word-Linux
+          path: |
+            dist/PDF2Word_Linux/
+            dist/PDF2Word_Linux.tar.gz
+
+  release:
+    needs: [build-macos, build-windows, build-linux]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: List downloaded files
+        run: |
+          find . -type f -name "*.dmg" -o -name "*.zip" -o -name "*.tar.gz"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            PDF2Word-macOS/dist/PDF2Word_macOS.dmg
+            PDF2Word-Windows/dist/PDF2Word_Windows.zip
+            PDF2Word-Linux/dist/PDF2Word_Linux.tar.gz
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,97 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# PyInstaller
+*.spec.bak
+*.manifest
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# PyQt
+*.ui.autosave
+
+# Project specific
+tests/samples/*
+!tests/samples/.gitkeep
+tests/reports/
+*.log
+
+# Build artifacts
+dist/
+build/
+*.exe
+*.app
+*.dmg
+*.deb
+*.rpm
+*.AppImage
+
+# Temporary files
+*.tmp
+*.temp
+.~*
+
+# OS files
+Thumbs.db
+desktop.ini
+
+# Tessdata (downloaded separately)
+assets/tessdata/*.traineddata
+!assets/tessdata/.gitkeep
+
+# Output files
+output/
+*.docx
+*.txt
+!README.md
+!INSTALL.md
+!tests/README.md

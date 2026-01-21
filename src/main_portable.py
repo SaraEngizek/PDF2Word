@@ -79,6 +79,38 @@ def setup_portable_environment():
         if tesseract_dir.exists():
             os.environ['PATH'] = str(tesseract_dir) + os.pathsep + os.environ.get('PATH', '')
 
+        # Poppler'ı da PATH'e ekle
+        poppler_dir = app_path / "poppler"
+        if poppler_dir.exists():
+            os.environ['PATH'] = str(poppler_dir) + os.pathsep + os.environ.get('PATH', '')
+
+    # Linux'ta gömülü Tesseract ve Poppler için ortam ayarla
+    elif system == "Linux":
+        tesseract_lib = app_path / "tesseract" / "lib"
+        poppler_lib = app_path / "poppler" / "lib"
+        tesseract_bin = app_path / "tesseract" / "bin"
+        poppler_bin = app_path / "poppler" / "bin"
+
+        # LD_LIBRARY_PATH ayarla
+        ld_path = os.environ.get('LD_LIBRARY_PATH', '')
+        new_ld_paths = []
+        if tesseract_lib.exists():
+            new_ld_paths.append(str(tesseract_lib))
+        if poppler_lib.exists():
+            new_ld_paths.append(str(poppler_lib))
+        if new_ld_paths:
+            os.environ['LD_LIBRARY_PATH'] = os.pathsep.join(new_ld_paths) + os.pathsep + ld_path
+            logger.info(f"LD_LIBRARY_PATH set to: {os.environ['LD_LIBRARY_PATH'][:100]}...")
+
+        # PATH'e ekle
+        current_path = os.environ.get('PATH', '')
+        if tesseract_bin.exists():
+            os.environ['PATH'] = str(tesseract_bin) + os.pathsep + current_path
+            current_path = os.environ['PATH']
+        if poppler_bin.exists():
+            os.environ['PATH'] = str(poppler_bin) + os.pathsep + current_path
+        logger.info(f"Updated PATH for Linux: {os.environ['PATH'][:100]}...")
+
     # macOS'ta Homebrew PATH'lerini ekle (poppler ve tesseract için)
     elif system == "Darwin":
         homebrew_paths = ["/opt/homebrew/bin", "/usr/local/bin"]

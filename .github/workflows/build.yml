@@ -7,7 +7,7 @@ on:
       - 'v*'
   pull_request:
     branches: [ main, master ]
-  workflow_dispatch:  # Manuel tetikleme için
+  workflow_dispatch:
 
 jobs:
   build-macos:
@@ -30,9 +30,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install PyQt6 pytesseract pdf2image Pillow numpy python-docx pyinstaller
 
-      - name: Copy tessdata
+      - name: Bundle Tesseract for macOS
         run: |
+          mkdir -p portable-build/tesseract-bundle/macos/bin
           mkdir -p portable-build/tesseract-bundle/tessdata
+
+          # Tesseract binary kopyala
+          cp /opt/homebrew/bin/tesseract portable-build/tesseract-bundle/macos/bin/ 2>/dev/null || \
+          cp /usr/local/bin/tesseract portable-build/tesseract-bundle/macos/bin/ 2>/dev/null || true
+
+          # Tessdata kopyala
           cp /opt/homebrew/share/tessdata/*.traineddata portable-build/tesseract-bundle/tessdata/ 2>/dev/null || \
           cp /usr/local/share/tessdata/*.traineddata portable-build/tesseract-bundle/tessdata/ 2>/dev/null || true
 
@@ -71,27 +78,39 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install Poppler
+      - name: Download and Bundle Poppler
         run: |
-          # Poppler Windows kurulumu
           Invoke-WebRequest -Uri "https://github.com/oschwartz10612/poppler-windows/releases/download/v24.02.0-0/Release-24.02.0-0.zip" -OutFile "poppler.zip"
           Expand-Archive -Path "poppler.zip" -DestinationPath "C:\poppler"
+
+          # Poppler'ı bundle klasörüne kopyala
+          New-Item -ItemType Directory -Force -Path "portable-build\poppler-bundle\windows"
+          Copy-Item -Path "C:\poppler\poppler-24.02.0\Library\bin\*" -Destination "portable-build\poppler-bundle\windows\" -Recurse
+
           echo "C:\poppler\poppler-24.02.0\Library\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-      - name: Install Tesseract
+      - name: Download and Bundle Tesseract
         run: |
-          choco install tesseract --no-progress -y
+          # Tesseract indirme
+          Invoke-WebRequest -Uri "https://github.com/UB-Mannheim/tesseract/releases/download/v5.3.3/tesseract-ocr-w64-setup-5.3.3.20231005.exe" -OutFile "tesseract-installer.exe"
+
+          # Sessiz kurulum
+          Start-Process -FilePath "tesseract-installer.exe" -ArgumentList "/S" -Wait
+
+          # Tesseract'ı bundle klasörüne kopyala
+          New-Item -ItemType Directory -Force -Path "portable-build\tesseract-bundle\windows"
+          Copy-Item -Path "C:\Program Files\Tesseract-OCR\*" -Destination "portable-build\tesseract-bundle\windows\" -Recurse
+
+          # Tessdata ayrıca kopyala
+          New-Item -ItemType Directory -Force -Path "portable-build\tesseract-bundle\tessdata"
+          Copy-Item -Path "C:\Program Files\Tesseract-OCR\tessdata\*" -Destination "portable-build\tesseract-bundle\tessdata\" -Recurse -ErrorAction SilentlyContinue
+
           echo "C:\Program Files\Tesseract-OCR" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install PyQt6 pytesseract pdf2image Pillow numpy python-docx pyinstaller
-
-      - name: Copy tessdata
-        run: |
-          New-Item -ItemType Directory -Force -Path "portable-build\tesseract-bundle\tessdata"
-          Copy-Item "C:\Program Files\Tesseract-OCR\tessdata\*.traineddata" "portable-build\tesseract-bundle\tessdata\" -ErrorAction SilentlyContinue
 
       - name: Create icon
         run: |
@@ -115,7 +134,7 @@ jobs:
             dist/PDF2Word_Windows.zip
 
   build-linux:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -131,16 +150,38 @@ jobs:
           sudo apt-get install -y poppler-utils tesseract-ocr tesseract-ocr-tur tesseract-ocr-eng
           sudo apt-get install -y libxcb-xinerama0 libxcb-cursor0 libopengl0 libglx0 libegl1
 
+      - name: Bundle Tesseract for Linux
+        run: |
+          mkdir -p portable-build/tesseract-bundle/linux/bin
+          mkdir -p portable-build/tesseract-bundle/tessdata
+
+          # Tesseract binary kopyala
+          cp /usr/bin/tesseract portable-build/tesseract-bundle/linux/bin/
+
+          # Tesseract'ın bağımlı olduğu kütüphaneleri bul ve kopyala
+          mkdir -p portable-build/tesseract-bundle/linux/lib
+          ldd /usr/bin/tesseract | grep "=> /" | awk '{print $3}' | xargs -I '{}' cp -v '{}' portable-build/tesseract-bundle/linux/lib/ 2>/dev/null || true
+
+          # Tessdata kopyala
+          cp /usr/share/tesseract-ocr/5/tessdata/*.traineddata portable-build/tesseract-bundle/tessdata/ 2>/dev/null || \
+          cp /usr/share/tesseract-ocr/4.00/tessdata/*.traineddata portable-build/tesseract-bundle/tessdata/ 2>/dev/null || true
+
+      - name: Bundle Poppler for Linux
+        run: |
+          mkdir -p portable-build/poppler-bundle/linux/bin
+          mkdir -p portable-build/poppler-bundle/linux/lib
+
+          # Poppler binary'lerini kopyala
+          cp /usr/bin/pdftoppm portable-build/poppler-bundle/linux/bin/
+          cp /usr/bin/pdfinfo portable-build/poppler-bundle/linux/bin/
+
+          # Poppler kütüphanelerini kopyala
+          ldd /usr/bin/pdftoppm | grep "=> /" | awk '{print $3}' | xargs -I '{}' cp -v '{}' portable-build/poppler-bundle/linux/lib/ 2>/dev/null || true
+
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install PyQt6 pytesseract pdf2image Pillow numpy python-docx pyinstaller
-
-      - name: Copy tessdata
-        run: |
-          mkdir -p portable-build/tesseract-bundle/tessdata
-          cp /usr/share/tesseract-ocr/5/tessdata/*.traineddata portable-build/tesseract-bundle/tessdata/ 2>/dev/null || \
-          cp /usr/share/tesseract-ocr/4.00/tessdata/*.traineddata portable-build/tesseract-bundle/tessdata/ 2>/dev/null || true
 
       - name: Create icon
         run: |
@@ -150,6 +191,18 @@ jobs:
       - name: Build with PyInstaller
         run: |
           pyinstaller --clean --noconfirm portable-build/specs/linux_portable.spec
+
+      - name: Create runner script
+        run: |
+          cat > dist/PDF2Word_Linux/run.sh << 'EOF'
+          #!/bin/bash
+          DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+          export LD_LIBRARY_PATH="$DIR/_internal/tesseract/lib:$DIR/_internal/poppler/lib:$LD_LIBRARY_PATH"
+          export PATH="$DIR/_internal/tesseract/bin:$DIR/_internal/poppler/bin:$PATH"
+          export TESSDATA_PREFIX="$DIR/_internal/tessdata"
+          "$DIR/PDF2Word" "$@"
+          EOF
+          chmod +x dist/PDF2Word_Linux/run.sh
 
       - name: Create tar.gz for release
         run: |

@@ -91,10 +91,7 @@ jobs:
 
       - name: Download and Bundle Tesseract
         run: |
-          # Tesseract portable zip indir
-          Invoke-WebRequest -Uri "https://digi.bib.uni-mannheim.de/tesseract/tesseract-ocr-w64-setup-5.3.3.20231005.exe" -OutFile "tesseract-installer.exe"
-
-          # Chocolatey ile kur (daha güvenilir)
+          # Chocolatey ile Tesseract kur
           choco install tesseract --no-progress -y
 
           # Tesseract'ı bundle klasörüne kopyala
@@ -104,6 +101,12 @@ jobs:
           # Tessdata ayrıca kopyala
           New-Item -ItemType Directory -Force -Path "portable-build\tesseract-bundle\tessdata"
           Copy-Item -Path "C:\Program Files\Tesseract-OCR\tessdata\*" -Destination "portable-build\tesseract-bundle\tessdata\" -Recurse -ErrorAction SilentlyContinue
+
+          # Kontrol
+          Write-Host "=== Tesseract bundle ==="
+          Get-ChildItem "portable-build\tesseract-bundle\windows" -ErrorAction SilentlyContinue
+          Write-Host "=== Tessdata ==="
+          Get-ChildItem "portable-build\tesseract-bundle\tessdata" -ErrorAction SilentlyContinue
 
           echo "C:\Program Files\Tesseract-OCR" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
@@ -150,64 +153,59 @@ jobs:
           sudo apt-get install -y poppler-utils tesseract-ocr tesseract-ocr-tur tesseract-ocr-eng
           sudo apt-get install -y libxcb-xinerama0 libxcb-cursor0 libopengl0 libglx0 libegl1
 
-      - name: Bundle Tesseract for Linux
+      - name: Bundle Tesseract binaries and libs
         run: |
+          # Bundle klasörlerini oluştur
           mkdir -p portable-build/tesseract-bundle/linux/bin
+          mkdir -p portable-build/tesseract-bundle/linux/lib
           mkdir -p portable-build/tesseract-bundle/tessdata
 
-          # Tesseract binary kopyala
+          # Tesseract binary'yi kopyala
           cp /usr/bin/tesseract portable-build/tesseract-bundle/linux/bin/
+          chmod +x portable-build/tesseract-bundle/linux/bin/tesseract
 
-          # Tesseract'ın bağımlı olduğu kütüphaneleri bul ve kopyala
-          mkdir -p portable-build/tesseract-bundle/linux/lib
-          for lib in $(ldd /usr/bin/tesseract | grep "=> /" | awk '{print $3}'); do
-            cp -v "$lib" portable-build/tesseract-bundle/linux/lib/ 2>/dev/null || true
+          # Tesseract ve bağımlı kütüphaneleri kopyala
+          cp /usr/lib/x86_64-linux-gnu/libtesseract.so* portable-build/tesseract-bundle/linux/lib/ 2>/dev/null || true
+          cp /usr/lib/x86_64-linux-gnu/liblept.so* portable-build/tesseract-bundle/linux/lib/ 2>/dev/null || true
+
+          # Tüm bağımlılıkları kopyala
+          ldd /usr/bin/tesseract | grep "=> /" | awk '{print $3}' | while read lib; do
+            cp "$lib" portable-build/tesseract-bundle/linux/lib/ 2>/dev/null || true
           done
 
-          # Leptonica kütüphanelerini de ekle
-          for lib in /usr/lib/x86_64-linux-gnu/liblept*.so*; do
-            cp -v "$lib" portable-build/tesseract-bundle/linux/lib/ 2>/dev/null || true
-          done
+          # Tessdata kopyala (eng ve tur)
+          cp /usr/share/tesseract-ocr/5/tessdata/eng.traineddata portable-build/tesseract-bundle/tessdata/ 2>/dev/null || \
+          cp /usr/share/tesseract-ocr/4.00/tessdata/eng.traineddata portable-build/tesseract-bundle/tessdata/ 2>/dev/null || true
 
-          # Tesseract kütüphanelerini de ekle
-          for lib in /usr/lib/x86_64-linux-gnu/libtesseract*.so*; do
-            cp -v "$lib" portable-build/tesseract-bundle/linux/lib/ 2>/dev/null || true
-          done
+          cp /usr/share/tesseract-ocr/5/tessdata/tur.traineddata portable-build/tesseract-bundle/tessdata/ 2>/dev/null || \
+          cp /usr/share/tesseract-ocr/4.00/tessdata/tur.traineddata portable-build/tesseract-bundle/tessdata/ 2>/dev/null || true
 
-          # Tessdata kopyala
-          if [ -d "/usr/share/tesseract-ocr/5/tessdata" ]; then
-            cp /usr/share/tesseract-ocr/5/tessdata/*.traineddata portable-build/tesseract-bundle/tessdata/
-          elif [ -d "/usr/share/tesseract-ocr/4.00/tessdata" ]; then
-            cp /usr/share/tesseract-ocr/4.00/tessdata/*.traineddata portable-build/tesseract-bundle/tessdata/
-          fi
+          cp /usr/share/tesseract-ocr/5/tessdata/osd.traineddata portable-build/tesseract-bundle/tessdata/ 2>/dev/null || \
+          cp /usr/share/tesseract-ocr/4.00/tessdata/osd.traineddata portable-build/tesseract-bundle/tessdata/ 2>/dev/null || true
 
-          # Kontrol
-          ls -la portable-build/tesseract-bundle/linux/bin/
-          ls -la portable-build/tesseract-bundle/linux/lib/ | head -20
-          ls -la portable-build/tesseract-bundle/tessdata/
+          echo "=== Tesseract bundle contents ==="
+          find portable-build/tesseract-bundle -type f | head -30
 
-      - name: Bundle Poppler for Linux
+      - name: Bundle Poppler binaries and libs
         run: |
           mkdir -p portable-build/poppler-bundle/linux/bin
           mkdir -p portable-build/poppler-bundle/linux/lib
 
-          # Poppler binary'lerini kopyala
+          # Poppler binary'leri kopyala
           cp /usr/bin/pdftoppm portable-build/poppler-bundle/linux/bin/
           cp /usr/bin/pdfinfo portable-build/poppler-bundle/linux/bin/
+          chmod +x portable-build/poppler-bundle/linux/bin/*
 
-          # Poppler kütüphanelerini kopyala
-          for lib in $(ldd /usr/bin/pdftoppm | grep "=> /" | awk '{print $3}'); do
-            cp -v "$lib" portable-build/poppler-bundle/linux/lib/ 2>/dev/null || true
+          # Poppler kütüphaneleri
+          cp /usr/lib/x86_64-linux-gnu/libpoppler.so* portable-build/poppler-bundle/linux/lib/ 2>/dev/null || true
+
+          # Tüm bağımlılıkları kopyala
+          ldd /usr/bin/pdftoppm | grep "=> /" | awk '{print $3}' | while read lib; do
+            cp "$lib" portable-build/poppler-bundle/linux/lib/ 2>/dev/null || true
           done
 
-          # Poppler ana kütüphanelerini de ekle
-          for lib in /usr/lib/x86_64-linux-gnu/libpoppler*.so*; do
-            cp -v "$lib" portable-build/poppler-bundle/linux/lib/ 2>/dev/null || true
-          done
-
-          # Kontrol
-          ls -la portable-build/poppler-bundle/linux/bin/
-          ls -la portable-build/poppler-bundle/linux/lib/ | head -20
+          echo "=== Poppler bundle contents ==="
+          find portable-build/poppler-bundle -type f | head -20
 
       - name: Install Python dependencies
         run: |
@@ -225,15 +223,19 @@ jobs:
 
       - name: Create runner script
         run: |
-          cat > dist/PDF2Word_Linux/run.sh << 'EOF'
-          #!/bin/bash
-          DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-          export LD_LIBRARY_PATH="$DIR/_internal/tesseract/lib:$DIR/_internal/poppler/lib:$LD_LIBRARY_PATH"
-          export PATH="$DIR/_internal/tesseract/bin:$DIR/_internal/poppler/bin:$PATH"
-          export TESSDATA_PREFIX="$DIR/_internal/tessdata"
-          "$DIR/PDF2Word" "$@"
-          EOF
+          cat > dist/PDF2Word_Linux/run.sh << 'RUNEOF'
+#!/bin/bash
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export LD_LIBRARY_PATH="$DIR/_internal/tesseract/lib:$DIR/_internal/poppler/lib:$LD_LIBRARY_PATH"
+export PATH="$DIR/_internal/tesseract/bin:$DIR/_internal/poppler/bin:$PATH"
+export TESSDATA_PREFIX="$DIR/_internal/tessdata"
+"$DIR/PDF2Word" "$@"
+RUNEOF
           chmod +x dist/PDF2Word_Linux/run.sh
+
+          # İçeriği kontrol et
+          echo "=== Final bundle structure ==="
+          find dist/PDF2Word_Linux/_internal -name "tesseract*" -o -name "poppler*" -o -name "*.traineddata" 2>/dev/null | head -30
 
       - name: Create tar.gz for release
         run: |

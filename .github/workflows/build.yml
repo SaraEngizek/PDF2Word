@@ -153,59 +153,40 @@ jobs:
           sudo apt-get install -y poppler-utils tesseract-ocr tesseract-ocr-tur tesseract-ocr-eng
           sudo apt-get install -y libxcb-xinerama0 libxcb-cursor0 libopengl0 libglx0 libegl1
 
-      - name: Bundle Tesseract binaries and libs
+      - name: Download Tesseract AppImage (static binary)
         run: |
-          # Bundle klasörlerini oluştur
           mkdir -p portable-build/tesseract-bundle/linux/bin
-          mkdir -p portable-build/tesseract-bundle/linux/lib
           mkdir -p portable-build/tesseract-bundle/tessdata
 
-          # Tesseract binary'yi kopyala
-          cp /usr/bin/tesseract portable-build/tesseract-bundle/linux/bin/
+          # Tesseract static binary indir (AppImage içinden)
+          wget -q "https://github.com/AlexanderP/tesseract-appimage/releases/download/v5.3.1/tesseract-5.3.1-x86_64.AppImage" -O tesseract.AppImage
+          chmod +x tesseract.AppImage
+          ./tesseract.AppImage --appimage-extract
+
+          # Static binary'yi kopyala
+          cp squashfs-root/usr/bin/tesseract portable-build/tesseract-bundle/linux/bin/
           chmod +x portable-build/tesseract-bundle/linux/bin/tesseract
 
-          # Tesseract ve bağımlı kütüphaneleri kopyala
-          cp /usr/lib/x86_64-linux-gnu/libtesseract.so* portable-build/tesseract-bundle/linux/lib/ 2>/dev/null || true
-          cp /usr/lib/x86_64-linux-gnu/liblept.so* portable-build/tesseract-bundle/linux/lib/ 2>/dev/null || true
+          # Tessdata kopyala
+          cp squashfs-root/usr/share/tessdata/*.traineddata portable-build/tesseract-bundle/tessdata/ 2>/dev/null || true
 
-          # Tüm bağımlılıkları kopyala
-          ldd /usr/bin/tesseract | grep "=> /" | awk '{print $3}' | while read lib; do
-            cp "$lib" portable-build/tesseract-bundle/linux/lib/ 2>/dev/null || true
-          done
+          # Eğer tessdata boşsa sistem tessdata'sını kullan
+          if [ ! -f portable-build/tesseract-bundle/tessdata/eng.traineddata ]; then
+            cp /usr/share/tesseract-ocr/5/tessdata/eng.traineddata portable-build/tesseract-bundle/tessdata/ 2>/dev/null || true
+            cp /usr/share/tesseract-ocr/5/tessdata/tur.traineddata portable-build/tesseract-bundle/tessdata/ 2>/dev/null || true
+            cp /usr/share/tesseract-ocr/5/tessdata/osd.traineddata portable-build/tesseract-bundle/tessdata/ 2>/dev/null || true
+          fi
 
-          # Tessdata kopyala (eng ve tur)
-          cp /usr/share/tesseract-ocr/5/tessdata/eng.traineddata portable-build/tesseract-bundle/tessdata/ 2>/dev/null || \
-          cp /usr/share/tesseract-ocr/4.00/tessdata/eng.traineddata portable-build/tesseract-bundle/tessdata/ 2>/dev/null || true
+          echo "=== Tesseract bundle ==="
+          ls -la portable-build/tesseract-bundle/linux/bin/
+          ls -la portable-build/tesseract-bundle/tessdata/
 
-          cp /usr/share/tesseract-ocr/5/tessdata/tur.traineddata portable-build/tesseract-bundle/tessdata/ 2>/dev/null || \
-          cp /usr/share/tesseract-ocr/4.00/tessdata/tur.traineddata portable-build/tesseract-bundle/tessdata/ 2>/dev/null || true
-
-          cp /usr/share/tesseract-ocr/5/tessdata/osd.traineddata portable-build/tesseract-bundle/tessdata/ 2>/dev/null || \
-          cp /usr/share/tesseract-ocr/4.00/tessdata/osd.traineddata portable-build/tesseract-bundle/tessdata/ 2>/dev/null || true
-
-          echo "=== Tesseract bundle contents ==="
-          find portable-build/tesseract-bundle -type f | head -30
-
-      - name: Bundle Poppler binaries and libs
+      - name: Setup Poppler (use system)
         run: |
-          mkdir -p portable-build/poppler-bundle/linux/bin
-          mkdir -p portable-build/poppler-bundle/linux/lib
-
-          # Poppler binary'leri kopyala
-          cp /usr/bin/pdftoppm portable-build/poppler-bundle/linux/bin/
-          cp /usr/bin/pdfinfo portable-build/poppler-bundle/linux/bin/
-          chmod +x portable-build/poppler-bundle/linux/bin/*
-
-          # Poppler kütüphaneleri
-          cp /usr/lib/x86_64-linux-gnu/libpoppler.so* portable-build/poppler-bundle/linux/lib/ 2>/dev/null || true
-
-          # Tüm bağımlılıkları kopyala
-          ldd /usr/bin/pdftoppm | grep "=> /" | awk '{print $3}' | while read lib; do
-            cp "$lib" portable-build/poppler-bundle/linux/lib/ 2>/dev/null || true
-          done
-
-          echo "=== Poppler bundle contents ==="
-          find portable-build/poppler-bundle -type f | head -20
+          # Poppler için sistem binary'lerini kullanacağız
+          # Uygulama sistem poppler'ını bulacak şekilde ayarlı
+          which pdftoppm
+          pdftoppm -v
 
       - name: Install Python dependencies
         run: |
@@ -225,8 +206,7 @@ jobs:
         run: |
           echo '#!/bin/bash' > dist/PDF2Word_Linux/run.sh
           echo 'DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"' >> dist/PDF2Word_Linux/run.sh
-          echo 'export LD_LIBRARY_PATH="$DIR/_internal/tesseract/lib:$DIR/_internal/poppler/lib:$LD_LIBRARY_PATH"' >> dist/PDF2Word_Linux/run.sh
-          echo 'export PATH="$DIR/_internal/tesseract/bin:$DIR/_internal/poppler/bin:$PATH"' >> dist/PDF2Word_Linux/run.sh
+          echo 'export PATH="$DIR/_internal/tesseract/bin:$PATH"' >> dist/PDF2Word_Linux/run.sh
           echo 'export TESSDATA_PREFIX="$DIR/_internal/tessdata"' >> dist/PDF2Word_Linux/run.sh
           echo '"$DIR/PDF2Word" "$@"' >> dist/PDF2Word_Linux/run.sh
           chmod +x dist/PDF2Word_Linux/run.sh

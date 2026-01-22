@@ -223,19 +223,14 @@ jobs:
 
       - name: Create runner script
         run: |
-          cat > dist/PDF2Word_Linux/run.sh << 'RUNEOF'
-#!/bin/bash
-DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export LD_LIBRARY_PATH="$DIR/_internal/tesseract/lib:$DIR/_internal/poppler/lib:$LD_LIBRARY_PATH"
-export PATH="$DIR/_internal/tesseract/bin:$DIR/_internal/poppler/bin:$PATH"
-export TESSDATA_PREFIX="$DIR/_internal/tessdata"
-"$DIR/PDF2Word" "$@"
-RUNEOF
+          echo '#!/bin/bash' > dist/PDF2Word_Linux/run.sh
+          echo 'DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"' >> dist/PDF2Word_Linux/run.sh
+          echo 'export LD_LIBRARY_PATH="$DIR/_internal/tesseract/lib:$DIR/_internal/poppler/lib:$LD_LIBRARY_PATH"' >> dist/PDF2Word_Linux/run.sh
+          echo 'export PATH="$DIR/_internal/tesseract/bin:$DIR/_internal/poppler/bin:$PATH"' >> dist/PDF2Word_Linux/run.sh
+          echo 'export TESSDATA_PREFIX="$DIR/_internal/tessdata"' >> dist/PDF2Word_Linux/run.sh
+          echo '"$DIR/PDF2Word" "$@"' >> dist/PDF2Word_Linux/run.sh
           chmod +x dist/PDF2Word_Linux/run.sh
-
-          # İçeriği kontrol et
-          echo "=== Final bundle structure ==="
-          find dist/PDF2Word_Linux/_internal -name "tesseract*" -o -name "poppler*" -o -name "*.traineddata" 2>/dev/null | head -30
+          cat dist/PDF2Word_Linux/run.sh
 
       - name: Create tar.gz for release
         run: |

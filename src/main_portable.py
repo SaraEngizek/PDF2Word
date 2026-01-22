@@ -240,6 +240,54 @@ Uygulamayı yeniden başlatın.
     return guide
 
 
+def install_linux_debs():
+    """Linux'ta offline_install klasöründeki deb paketlerini kur"""
+    import subprocess
+    import platform
+
+    if platform.system() != "Linux":
+        return True
+
+    app_path = get_base_path()
+    debs_dir = app_path / "offline_install" / "debs"
+
+    if not debs_dir.exists():
+        logger.warning(f"Deb packages not found at: {debs_dir}")
+        return False
+
+    deb_files = list(debs_dir.glob("*.deb"))
+    if not deb_files:
+        logger.warning("No deb files found")
+        return False
+
+    logger.info(f"Installing deb packages from: {debs_dir}")
+
+    try:
+        # pkexec ile root yetkisi al ve deb'leri kur
+        for deb_file in deb_files:
+            logger.info(f"Installing: {deb_file.name}")
+            result = subprocess.run(
+                ["pkexec", "dpkg", "-i", str(deb_file)],
+                capture_output=True,
+                text=True
+            )
+            if result.returncode != 0:
+                logger.warning(f"dpkg returned {result.returncode}: {result.stderr}")
+
+        # Eksik bağımlılıkları çöz
+        subprocess.run(
+            ["pkexec", "apt-get", "install", "-f", "-y"],
+            capture_output=True,
+            text=True
+        )
+
+        logger.info("Deb packages installed successfully")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to install deb packages: {e}")
+        return False
+
+
 def main():
     """Ana uygulama giriş noktası"""
     from PyQt6.QtWidgets import QApplication, QMessageBox
@@ -263,6 +311,17 @@ def main():
             tesseract_cmd = find_system_tesseract()
             if not tessdata_dir:
                 tessdata_dir = find_tessdata()
+
+        # Tesseract hala bulunamadıysa Linux'ta deb paketlerini kur
+        if not tesseract_cmd or not check_tesseract(tesseract_cmd):
+            import platform
+            if platform.system() == "Linux":
+                logger.info("Tesseract not found, attempting to install from offline debs...")
+                if install_linux_debs():
+                    # Tekrar kontrol et
+                    tesseract_cmd = find_system_tesseract()
+                    if not tessdata_dir:
+                        tessdata_dir = find_tessdata()
 
         # Tesseract hala bulunamadıysa hata göster
         if not tesseract_cmd or not check_tesseract(tesseract_cmd):

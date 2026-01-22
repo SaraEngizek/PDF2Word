@@ -147,46 +147,11 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install system dependencies
+      - name: Install system dependencies for build
         run: |
           sudo apt-get update
           sudo apt-get install -y poppler-utils tesseract-ocr tesseract-ocr-tur tesseract-ocr-eng
           sudo apt-get install -y libxcb-xinerama0 libxcb-cursor0 libopengl0 libglx0 libegl1
-
-      - name: Download Tesseract AppImage (static binary)
-        run: |
-          mkdir -p portable-build/tesseract-bundle/linux/bin
-          mkdir -p portable-build/tesseract-bundle/tessdata
-
-          # Tesseract static binary indir (AppImage içinden)
-          wget -q "https://github.com/AlexanderP/tesseract-appimage/releases/download/v5.3.1/tesseract-5.3.1-x86_64.AppImage" -O tesseract.AppImage
-          chmod +x tesseract.AppImage
-          ./tesseract.AppImage --appimage-extract
-
-          # Static binary'yi kopyala
-          cp squashfs-root/usr/bin/tesseract portable-build/tesseract-bundle/linux/bin/
-          chmod +x portable-build/tesseract-bundle/linux/bin/tesseract
-
-          # Tessdata kopyala
-          cp squashfs-root/usr/share/tessdata/*.traineddata portable-build/tesseract-bundle/tessdata/ 2>/dev/null || true
-
-          # Eğer tessdata boşsa sistem tessdata'sını kullan
-          if [ ! -f portable-build/tesseract-bundle/tessdata/eng.traineddata ]; then
-            cp /usr/share/tesseract-ocr/5/tessdata/eng.traineddata portable-build/tesseract-bundle/tessdata/ 2>/dev/null || true
-            cp /usr/share/tesseract-ocr/5/tessdata/tur.traineddata portable-build/tesseract-bundle/tessdata/ 2>/dev/null || true
-            cp /usr/share/tesseract-ocr/5/tessdata/osd.traineddata portable-build/tesseract-bundle/tessdata/ 2>/dev/null || true
-          fi
-
-          echo "=== Tesseract bundle ==="
-          ls -la portable-build/tesseract-bundle/linux/bin/
-          ls -la portable-build/tesseract-bundle/tessdata/
-
-      - name: Setup Poppler (use system)
-        run: |
-          # Poppler için sistem binary'lerini kullanacağız
-          # Uygulama sistem poppler'ını bulacak şekilde ayarlı
-          which pdftoppm
-          pdftoppm -v
 
       - name: Install Python dependencies
         run: |
@@ -202,15 +167,24 @@ jobs:
         run: |
           pyinstaller --clean --noconfirm portable-build/specs/linux_portable.spec
 
-      - name: Create runner script
+      - name: Add offline install files
         run: |
-          echo '#!/bin/bash' > dist/PDF2Word_Linux/run.sh
-          echo 'DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"' >> dist/PDF2Word_Linux/run.sh
-          echo 'export PATH="$DIR/_internal/tesseract/bin:$PATH"' >> dist/PDF2Word_Linux/run.sh
-          echo 'export TESSDATA_PREFIX="$DIR/_internal/tessdata"' >> dist/PDF2Word_Linux/run.sh
-          echo '"$DIR/PDF2Word" "$@"' >> dist/PDF2Word_Linux/run.sh
-          chmod +x dist/PDF2Word_Linux/run.sh
-          cat dist/PDF2Word_Linux/run.sh
+          # Deb paketlerini ve install script'i kopyala
+          mkdir -p dist/PDF2Word_Linux/offline_install/debs
+          cp portable-build/linux-offline/debs/*.deb dist/PDF2Word_Linux/offline_install/debs/
+          cp portable-build/linux-offline/install.sh dist/PDF2Word_Linux/offline_install/
+          chmod +x dist/PDF2Word_Linux/offline_install/install.sh
+
+          # Ana dizinde de install script oluştur
+          echo '#!/bin/bash' > dist/PDF2Word_Linux/install.sh
+          echo 'cd "$(dirname "$0")/offline_install" && sudo ./install.sh' >> dist/PDF2Word_Linux/install.sh
+          chmod +x dist/PDF2Word_Linux/install.sh
+
+          # İçeriği kontrol et
+          echo "=== Linux bundle contents ==="
+          ls -la dist/PDF2Word_Linux/
+          ls -la dist/PDF2Word_Linux/offline_install/
+          ls -la dist/PDF2Word_Linux/offline_install/debs/
 
       - name: Create tar.gz for release
         run: |

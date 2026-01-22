@@ -84,15 +84,10 @@ def setup_portable_environment():
         if poppler_dir.exists():
             os.environ['PATH'] = str(poppler_dir) + os.pathsep + os.environ.get('PATH', '')
 
-    # Linux'ta gömülü Tesseract için ortam ayarla (static binary kullanılıyor)
+    # Linux'ta sistem tesseract'ını kullan (deb paketi ile kurulmuş)
     elif system == "Linux":
-        tesseract_bin = app_path / "tesseract" / "bin"
-
-        # PATH'e ekle
-        current_path = os.environ.get('PATH', '')
-        if tesseract_bin.exists():
-            os.environ['PATH'] = str(tesseract_bin) + os.pathsep + current_path
-            logger.info(f"Added tesseract bin to PATH: {tesseract_bin}")
+        # Sistem tesseract'ı kullanılacak, özel bir ayar gerekmiyor
+        logger.info("Linux: Using system tesseract (installed via deb package)")
 
     # macOS'ta Homebrew PATH'lerini ekle (poppler ve tesseract için)
     elif system == "Darwin":

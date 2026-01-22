@@ -71,7 +71,6 @@ build/
 *.exe
 *.app
 *.dmg
-*.deb
 *.rpm
 *.AppImage
 
